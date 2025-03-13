@@ -1,0 +1,15 @@
+# Binaries
+vendor/
+*.exe
+*.log
+
+# Env files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+docker-compose.override.yml
