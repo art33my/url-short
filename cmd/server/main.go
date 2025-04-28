@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"url-short/internal/config"
+	"url-short/internal/handlers"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
@@ -27,6 +28,8 @@ func main() {
 		c.Next()
 	})
 
+	r.POST("/api/register", handlers.Register)
+	r.POST("/api/login", handlers.Login)
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Connected to DB!"})
 	})

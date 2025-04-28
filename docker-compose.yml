@@ -12,16 +12,23 @@ services:
       DB_PASSWORD: pass
       DB_NAME: urlshort
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   db:
     image: postgres:13
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
-      POSTGRES_DB: urlshort
+      POSTGRES_DB: urlshort  
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/migrations 
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d urlshort"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

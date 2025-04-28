@@ -1,0 +1,28 @@
+Table users {
+  id int [primary key, increment]
+  username varchar(50) [unique]
+  email varchar(100) [unique]
+  password_hash varchar(100)
+  created_at timestamp
+}
+
+Table links {
+  id int [primary key, increment]
+  user_id int [ref: > users.id]
+  original_url varchar(2048)
+  short_code varchar(10) [unique]
+  click_count int [default: 0]
+  created_at timestamp
+}
+
+Table click_analytics {
+  id int [primary key, increment]
+  link_id int [ref: > links.id]
+  ip_address varchar(45)
+  user_agent varchar(512)
+  location varchar(100)
+  device_type varchar(50)
+  os varchar(50)
+  browser varchar(50)
+  clicked_at timestamp
+}

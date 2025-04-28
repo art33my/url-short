@@ -13,3 +13,12 @@ vendor/
 
 # Docker
 docker-compose.override.yml
+
+# Тестовые файлы
+*.test
+
+# Файлы сборки
+build/
+
+# Локальные настройки
+.env.*
