@@ -2,7 +2,7 @@ CREATE TABLE links (
     id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(id) ON DELETE CASCADE,
     original_url VARCHAR(2048) NOT NULL,
-    short_code VARCHAR(10) UNIQUE NOT NULL,
+    short_code VARCHAR(20) UNIQUE NOT NULL,
     click_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

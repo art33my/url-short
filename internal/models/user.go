@@ -1,12 +1,12 @@
+// models/user.go
 package models
 
 import "time"
 
 type User struct {
-	ID           int       `json:"id"`
+	ID           int       `json:"-"`
 	Username     string    `json:"username"`
 	Email        string    `json:"email"`
-	Password     string    `json:"password"`
 	PasswordHash string    `json:"-"`
-	CreatedAt    time.Time `json:"created_at"`
+	CreatedAt    time.Time `json:"-"`
 }

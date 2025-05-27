@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"database/sql"
-	"errors"
 	"url-short/internal/models"
 )
 
@@ -16,10 +15,17 @@ func NewAnalyticRepository(db *sql.DB) *AnalyticRepository {
 
 func (r *AnalyticRepository) SaveClick(click *models.ClickAnalytic) error {
 	query := `
-        INSERT INTO click_analytics 
-        (link_id, ip_address, user_agent, location, device_type, os, browser, clicked_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO click_analytics (
+            link_id, 
+            ip_address, 
+            user_agent, 
+            location, 
+            device_type, 
+            os, 
+            browser
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
     `
+
 	_, err := r.DB.Exec(
 		query,
 		click.LinkID,
@@ -29,83 +35,44 @@ func (r *AnalyticRepository) SaveClick(click *models.ClickAnalytic) error {
 		click.DeviceType,
 		click.OS,
 		click.Browser,
-		click.ClickedAt,
 	)
 	return err
 }
+func (r *AnalyticRepository) GetAnalytics(linkID int) ([]models.ClickAnalytic, error) {
+	query := `
+        SELECT 
+            ip_address, 
+            location, 
+            device_type, 
+            os, 
+            browser, 
+            clicked_at 
+        FROM click_analytics 
+        WHERE link_id = $1
+    `
 
-func (r *AnalyticRepository) GetAnalytics(linkID int) (map[string]interface{}, error) {
-	result := make(map[string]interface{})
-
-	var total int
-	err := r.DB.QueryRow(
-		"SELECT COUNT(*) FROM click_analytics WHERE link_id = $1",
-		linkID,
-	).Scan(&total)
+	rows, err := r.DB.Query(query, linkID)
 	if err != nil {
-		return nil, errors.New("ошибка получения общего числа кликов")
-	}
-	result["total_clicks"] = total
-
-	devices := make(map[string]int)
-	rows, err := r.DB.Query(
-		"SELECT device_type, COUNT(*) FROM click_analytics WHERE link_id = $1 GROUP BY device_type",
-		linkID,
-	)
-	if err != nil {
-		return nil, errors.New("ошибка получения данных по устройствам")
+		return nil, err
 	}
 	defer rows.Close()
 
+	var analytics []models.ClickAnalytic
 	for rows.Next() {
-		var device string
-		var count int
-		if err := rows.Scan(&device, &count); err != nil {
-			continue
+		var ca models.ClickAnalytic
+		err := rows.Scan(
+			&ca.IPAddress,
+			&ca.Location,
+			&ca.DeviceType,
+			&ca.OS,
+			&ca.Browser,
+			&ca.ClickedAt,
+		)
+		if err != nil {
+			return nil, err
 		}
-		devices[device] = count
+		analytics = append(analytics, ca)
 	}
-	result["devices"] = devices
 
-	browsers := make(map[string]int)
-	rows, err = r.DB.Query(
-		"SELECT browser, COUNT(*) FROM click_analytics WHERE link_id = $1 GROUP BY browser",
-		linkID,
-	)
-	if err != nil {
-		return nil, errors.New("ошибка получения данных по браузерам")
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var browser string
-		var count int
-		if err := rows.Scan(&browser, &count); err != nil {
-			continue
-		}
-		browsers[browser] = count
-	}
-	result["browsers"] = browsers
-
-	locations := make(map[string]int)
-	rows, err = r.DB.Query(
-		"SELECT location, COUNT(*) FROM click_analytics WHERE link_id = $1 GROUP BY location",
-		linkID,
-	)
-	if err != nil {
-		return nil, errors.New("ошибка получения данных по локациям")
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var location string
-		var count int
-		if err := rows.Scan(&location, &count); err != nil {
-			continue
-		}
-		locations[location] = count
-	}
-	result["locations"] = locations
-
-	return result, nil
+	return analytics, nil
 }

@@ -8,7 +8,7 @@ import (
 
 func GenerateUniqueShortCode(repo *repositories.LinkRepository) (string, error) {
 	for {
-		code, err := generateRandomCode(6)
+		code, err := GenerateRandomCode(6)
 		if err != nil {
 			return "", err
 		}
@@ -23,7 +23,7 @@ func GenerateUniqueShortCode(repo *repositories.LinkRepository) (string, error) 
 	}
 }
 
-func generateRandomCode(length int) (string, error) {
+func GenerateRandomCode(length int) (string, error) {
 	b := make([]byte, length)
 	_, err := rand.Read(b)
 	if err != nil {

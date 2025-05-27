@@ -3,6 +3,7 @@ package repositories
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"url-short/internal/models"
 )
 
@@ -28,16 +29,20 @@ func (r *UserRepository) Create(user *models.User) error {
 	return nil
 }
 
-func (r *UserRepository) FindByEmail(email string) (*models.User, error) {
-	query := "SELECT id, username, email, password_hash FROM users WHERE email = $1"
-	row := r.DB.QueryRow(query, email)
+var ErrUserNotFound = errors.New("пользователь не найден")
 
-	var user models.User
-	if err := row.Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.New("пользователь не найден")
-		}
-		return nil, errors.New("ошибка базы данных")
+func (r *UserRepository) FindByEmail(email string) (*models.User, error) {
+	user := &models.User{}
+	err := r.DB.QueryRow(
+		"SELECT id, username, email, password_hash FROM users WHERE email = $1",
+		email,
+	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrUserNotFound
 	}
-	return &user, nil
+	if err != nil {
+		return nil, fmt.Errorf("ошибка поиска пользователя: %w", err)
+	}
+	return user, nil
 }

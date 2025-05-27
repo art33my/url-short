@@ -1,0 +1,261 @@
+definitions:
+  url-short_internal_models.AnalyticsResponse:
+    properties:
+      clicks:
+        description: Список кликов
+        items:
+          $ref: '#/definitions/url-short_internal_models.ClickStatistic'
+        type: array
+      total_clicks:
+        description: |-
+          Общее количество кликов
+          example: 42
+        type: integer
+    type: object
+  url-short_internal_models.ClickStatistic:
+    properties:
+      browser:
+        description: |-
+          Браузер пользователя
+          example: Chrome 115
+        type: string
+      clicked_at:
+        description: |-
+          Время клика
+          example: 2024-02-20T15:04:05Z
+        type: string
+      device_type:
+        description: |-
+          Тип устройства
+          example: mobile
+        type: string
+      ip_address:
+        description: |-
+          IP-адрес клиента
+          example: 192.168.1.1
+        type: string
+      location:
+        description: |-
+          Геолокация клиента
+          example: Moscow, Russia
+        type: string
+      os:
+        description: |-
+          Операционная система
+          example: Android 13
+        type: string
+    type: object
+  url-short_internal_models.CreateLinkRequest:
+    properties:
+      custom_code:
+        example: my_custom_code
+        type: string
+      original_url:
+        example: https://google.com
+        type: string
+    required:
+    - original_url
+    type: object
+  url-short_internal_models.ErrorResponse:
+    properties:
+      error:
+        description: |-
+          Описание ошибки
+          example: Неверные данные
+        type: string
+    type: object
+  url-short_internal_models.LinkResponse:
+    properties:
+      full_url:
+        example: http://localhost:8080/a1b2c3
+        type: string
+      short_code:
+        example: a1b2c3
+        type: string
+    type: object
+  url-short_internal_models.LoginRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: qwerty123
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  url-short_internal_models.LoginResponse:
+    properties:
+      token:
+        example: eyJhbGci...
+        type: string
+    type: object
+  url-short_internal_models.RegisterRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: qwerty123
+        minLength: 6
+        type: string
+      username:
+        example: john_doe
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+  url-short_internal_models.RegisterResponse:
+    properties:
+      message:
+        example: Пользователь создан
+        type: string
+    type: object
+info:
+  contact: {}
+  description: API для сокращения URL-адресов
+  title: URL Shortener API
+  version: "1.0"
+paths:
+  /api/links:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Данные ссылки
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/url-short_internal_models.CreateLinkRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/url-short_internal_models.LinkResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Создать короткую ссылку
+      tags:
+      - links
+  /api/links/{short_code}/stats:
+    get:
+      description: Возвращает аналитику кликов по короткой ссылке
+      parameters:
+      - description: Короткий код ссылки
+        example: test123
+        in: path
+        name: short_code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/url-short_internal_models.AnalyticsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/url-short_internal_models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/url-short_internal_models.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Получить статистику кликов
+      tags:
+      - analytics
+  /api/login:
+    post:
+      consumes:
+      - application/json
+      description: Вход в систему с email и паролем
+      parameters:
+      - description: Учетные данные
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/url-short_internal_models.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/url-short_internal_models.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Авторизация пользователя
+      tags:
+      - auth
+  /api/register:
+    post:
+      consumes:
+      - application/json
+      description: Создает нового пользователя в системе
+      parameters:
+      - description: Данные регистрации
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/url-short_internal_models.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/url-short_internal_models.RegisterResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Регистрация пользователя
+      tags:
+      - auth
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

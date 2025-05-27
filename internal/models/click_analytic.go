@@ -3,7 +3,7 @@ package models
 import "time"
 
 type ClickAnalytic struct {
-	ID         int       `json:"id"`
+	ID         int       `json:"-" gorm:"primaryKey"`
 	LinkID     int       `json:"link_id"`
 	IPAddress  string    `json:"ip_address"`
 	UserAgent  string    `json:"user_agent"`

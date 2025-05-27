@@ -38,7 +38,7 @@ func (r *LinkRepository) FindByShortCode(shortCode string) (*models.Link, error)
 	query := `
         SELECT id, user_id, original_url, short_code, created_at 
         FROM links 
-        WHERE short_code = $1
+        WHERE LOWER(short_code) = LOWER($1)  -- Регистронезависимый поиск
     `
 	row := r.DB.QueryRow(query, shortCode)
 	var link models.Link

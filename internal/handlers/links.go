@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -87,28 +86,32 @@ func isValidCustomCode(code string) bool {
 	return regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(code)
 }
 
+// CreateShortLink godoc
+// @Summary Создать короткую ссылку
+// @Tags links
+// @Security ApiKeyAuth
+// @Accept  json
+// @Produce json
+// @Param input body models.CreateLinkRequest true "Данные ссылки"
+// @Success 200 {object} models.LinkResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Router /api/links [post]
 func (h *LinkHandler) CreateShortLink(c *gin.Context) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не аутентифицирован"})
-		return
-	}
-
-	var req struct {
-		OriginalURL string `json:"original_url" binding:"required,url"`
-		CustomCode  string `json:"custom_code"`
-	}
+	var req models.CreateLinkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный URL"})
 		return
 	}
+
+	userID := c.MustGet("userID").(int)
 
 	var shortCode string
 	var err error
 
 	if req.CustomCode != "" {
 		if !isValidCustomCode(req.CustomCode) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Код должен содержать 2-20 символов (a-z, A-Z, 0-9, _, -)"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Недопустимый формат кода"})
 			return
 		}
 
@@ -131,7 +134,7 @@ func (h *LinkHandler) CreateShortLink(c *gin.Context) {
 	}
 
 	link := &models.Link{
-		UserID:      userID.(int),
+		UserID:      userID,
 		OriginalURL: req.OriginalURL,
 		ShortCode:   shortCode,
 	}
@@ -141,39 +144,35 @@ func (h *LinkHandler) CreateShortLink(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"short_code": shortCode})
+	c.JSON(http.StatusOK, models.LinkResponse{
+		ShortCode: shortCode,
+		FullURL:   fmt.Sprintf("%s/%s", c.Request.Host, shortCode),
+	})
 }
 
 func (h *LinkHandler) Redirect(c *gin.Context) {
 	shortCode := c.Param("short_code")
-	if shortCode == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Код не указан"})
-		return
-	}
+	log.Printf("[DEBUG] Запрос редиректа: %s", shortCode)
 
 	link, err := h.LinkRepo.FindByShortCode(shortCode)
 	if err != nil {
-		if errors.Is(err, repositories.ErrLinkNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Ссылка не найдена"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка базы данных"})
+		log.Printf("[ERROR] Ошибка поиска: %v | Код: %s", err, shortCode)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Ссылка не найдена"})
 		return
+	}
+	log.Printf("[INFO] Редирект: %s → %s", shortCode, link.OriginalURL)
+
+	if err := h.LinkRepo.IncrementClickCount(shortCode); err != nil {
+		log.Printf("[WARN] Ошибка инкремента: %v", err)
 	}
 
 	location, err := getLocationWithCache(c.ClientIP())
 	if err != nil {
-		log.Printf("Геолокация для IP %s не удалась: %v", c.ClientIP(), err)
+		log.Printf("[WARN] Ошибка геолокации: %v", err)
 		location = "unknown"
 	}
 
-	if err := h.LinkRepo.IncrementClickCount(shortCode); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка обновления счетчика"})
-		return
-	}
-
 	ua := useragent.Parse(c.GetHeader("User-Agent"))
-
 	clickData := &models.ClickAnalytic{
 		LinkID:     link.ID,
 		IPAddress:  c.ClientIP(),
@@ -182,30 +181,56 @@ func (h *LinkHandler) Redirect(c *gin.Context) {
 		DeviceType: ua.Device,
 		OS:         ua.OS,
 		Browser:    ua.Name,
-		ClickedAt:  time.Now(),
 	}
 
 	if err := h.AnalyticRepo.SaveClick(clickData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка сохранения аналитики"})
-		return
+		log.Printf("[ERROR] Ошибка сохранения клика: %v", err)
 	}
 
 	c.Redirect(http.StatusMovedPermanently, link.OriginalURL)
 }
 
+// GetLinkStats godoc
+// @Summary Получить статистику кликов
+// @Description Возвращает аналитику кликов по короткой ссылке
+// @Tags analytics
+// @Security ApiKeyAuth
+// @Produce json
+// @Param short_code path string true "Короткий код ссылки" example(test123)
+// @Success 200 {object} models.AnalyticsResponse
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 404 {object} models.ErrorResponse
+// @Router /api/links/{short_code}/stats [get]
 func (h *LinkHandler) GetLinkStats(c *gin.Context) {
 	shortCode := c.Param("short_code")
+
 	link, err := h.LinkRepo.FindByShortCode(shortCode)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Ссылка не найдена"})
 		return
 	}
 
-	stats, err := h.AnalyticRepo.GetAnalytics(link.ID)
+	dbStats, err := h.AnalyticRepo.GetAnalytics(link.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения статистики"})
 		return
 	}
 
-	c.JSON(http.StatusOK, stats)
+	response := models.AnalyticsResponse{
+		TotalClicks: len(dbStats),
+		Clicks:      make([]models.ClickStatistic, 0),
+	}
+
+	for _, s := range dbStats {
+		response.Clicks = append(response.Clicks, models.ClickStatistic{
+			IPAddress:  s.IPAddress,
+			Location:   s.Location,
+			DeviceType: s.DeviceType,
+			OS:         s.OS,
+			Browser:    s.Browser,
+			ClickedAt:  s.ClickedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, response)
 }

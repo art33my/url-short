@@ -9,23 +9,42 @@ import (
 	"url-short/internal/middleware"
 	"url-short/internal/repositories"
 
+	_ "url-short/docs"
+
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
+
+// @title URL Shortener API
+// @version 1.0
+// @description API для сокращения URL-адресов
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
 
 func main() {
 	cfg := config.LoadConfig()
+
+	if cfg.DBHost == "" || cfg.DBPort == "" || cfg.DBUser == "" || cfg.DBName == "" {
+		log.Fatal("[FATAL] Не заданы параметры подключения к БД в .env")
+	}
 
 	psqlInfo := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName,
 	)
-
 	db, err := sql.Open("postgres", psqlInfo)
 	if err != nil {
-		log.Fatalf("Ошибка подключения к БД: %v", err)
+		log.Fatalf("[FATAL] Ошибка подключения: %v", err)
 	}
 	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		log.Fatalf("[FATAL] Ошибка аутентификации: %v", err)
+	}
+	log.Println("Успешное подключение к PostgreSQL")
 
 	userRepo := repositories.NewUserRepository(db)
 	linkRepo := repositories.NewLinkRepository(db)
@@ -39,24 +58,40 @@ func main() {
 
 	r := gin.Default()
 
-	r.Use(gin.Logger())
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Next()
+	})
 
-	r.POST("/api/register", authHandler.Register)
-	r.POST("/api/login", authHandler.Login)
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "Connected to DB!"})
+	r.LoadHTMLGlob("web/templates/*.html")
+	r.Static("/static", "./web/static")
+
+	r.GET("/", func(c *gin.Context) {
+		c.HTML(200, "index.html", nil)
 	})
 	r.GET("/:short_code", linkHandler.Redirect)
+	api := r.Group("/api")
+	{
+		api.POST("/register", authHandler.Register)
+		api.POST("/login", authHandler.Login)
+	}
 
-	authGroup := r.Group("/api")
+	authGroup := api.Group("")
 	authGroup.Use(middleware.AuthMiddleware(cfg))
 	{
 		authGroup.POST("/links", linkHandler.CreateShortLink)
 	}
 
-	authGroup.GET("/links/:short_code/stats", linkHandler.GetLinkStats)
+	statsGroup := api.Group("")
+	statsGroup.Use(middleware.AuthMiddleware(cfg))
+	{
+		statsGroup.GET("/links/:short_code/stats", linkHandler.GetLinkStats)
+	}
+	// swagger
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
+	log.Printf("Сервер запущен на http://localhost:%s", cfg.AppPort)
 	if err := r.Run(":" + cfg.AppPort); err != nil {
-		log.Fatalf("Ошибка запуска сервера: %v", err)
+		log.Fatalf("[FATAL] Ошибка запуска: %v", err)
 	}
 }

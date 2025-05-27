@@ -8,27 +8,35 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
-      DB_USER: user
-      DB_PASSWORD: pass
-      DB_NAME: urlshort
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-url_shortener}
+      JWT_SECRET: ${JWT_SECRET:-secret}
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - url-short-net
 
   db:
-    image: postgres:13
+    image: postgres:15-alpine
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
-      POSTGRES_DB: urlshort  
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-url_shortener}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/migrations 
+      - ./migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d urlshort"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - url-short-net
 
 volumes:
   postgres_data:
+
+networks:
+  url-short-net:
